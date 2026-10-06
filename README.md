@@ -2,33 +2,43 @@
 
 University of North Georgia classroom lab. A one-class-session supply-chain game (classic four-seat structure: retailer, wholesaler, distributor, factory) using cases of Nighthawk gear. Shoppers change their order once. The chain usually overreacts. That is the bullwhip.
 
-Students do **not** play from this GitHub repo. They play on the **published website**.
+Students do **not** play from this GitHub repo. They play on a **public website URL**.
 
-## Share with a class
+## Easiest free host (no Grok paid plan)
 
-1. Publish the app (Grok App Builder → **Publish**) so you have a public URL.
-2. Put that URL in D2L, email, or on the board. Phones and laptops both work. No student accounts.
+Use **Vercel Hobby** (free) plus a free **Neon** database so every phone in the room shares the same lab.
 
-### You (instructor)
+### 1. Create a free database (2 minutes)
 
-1. Open the site → **Host as instructor**.
-2. Create a room. One chain (Dahlonega) is enough to illustrate. Use more chains if the class is large (4 students per chain).
-3. Write the **4-letter room code** on the board.
-4. Keep the **4-digit PIN** for yourself. You will need it if you reopen the desk later.
-5. Wait until seats fill, then press **Start week 1**. Empty seats become computer players.
-6. After 12 weeks, show the order chart on the projector. Demand only jumped once (4 → 8 in week 5).
+1. Open [console.neon.tech](https://console.neon.tech) and sign in with GitHub.
+2. Create a project (any name, e.g. `nighthawk-chain`).
+3. On the dashboard, copy the connection string. It starts with `postgres://` or `postgresql://`.  
+   Choose the **pooled** string if Neon shows both.
 
-### Students
+### 2. Deploy the site (3 minutes)
 
-1. Open the same website.
-2. **Join a lab**.
-3. Enter the room code + a short nickname.
-4. Pick an open seat: Retailer, Wholesaler, Distributor, or Factory.
-5. Each week, order 0–30 cases. Do not compare inventory numbers with other seats.
+1. Open [vercel.com/new](https://vercel.com/new) and sign in with the **same GitHub account**.
+2. Import **`gupvar/bullwhip-game-ung`**.
+3. Before you click Deploy, add one environment variable:
 
-### Practice without a class
+   | Name | Value |
+   | --- | --- |
+   | `DATABASE_URL` | the Neon connection string you copied |
 
-Anyone can open **Practice lab** and walk all four seats (or hold one seat against a simple computer rule). No room code required.
+4. Click **Deploy**. Wait until it is green.
+5. Open the `.vercel.app` URL. If Vercel asks *you* to log in, go to the project **Settings → Deployment Protection** and turn **Vercel Authentication** off so students are not blocked.
+
+That `.vercel.app` link is what you put in D2L.
+
+### 3. Run class
+
+**You:** site → **Host as instructor** → Create room → write the 4-letter code on the board, keep the PIN.
+
+**Students:** same site → **Join a lab** → code + nickname → pick a seat.
+
+Empty seats become computer players when you press **Start week 1**.
+
+**Practice / demo with no students:** **Practice lab** — no room code.
 
 ## Class timing (50 minutes)
 
