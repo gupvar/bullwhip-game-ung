@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Nighthawk Chain",
+      "hasCanvas": false,
+      "bodyTextLen": 869,
+      "bodyTextHash": "372e35ddfc1a5e11bf9b841571704e0341cb8d0316dee968761ef7be6d330338",
+      "bodyTextPrefix": "Nighthawk Chain UNG SUPPLY CHAIN LAB How to play Join a lab UNIV",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Nighthawk Chain",
+      "hasCanvas": false,
+      "bodyTextLen": 857,
+      "bodyTextHash": "cb53c9fe09fe7bac01dc4b2858e6e0b493db1f07b6d2d2d44b33d3db849b3e3d",
+      "bodyTextPrefix": "Nighthawk Chain UNG SUPPLY CHAIN LAB Join a lab UNIVERSITY OF NO",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
