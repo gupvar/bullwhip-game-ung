@@ -90,6 +90,43 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
+const SCHEMA_SQL = `
+create table if not exists game_sessions (
+  id text primary key,
+  room_code text not null unique,
+  instructor_pin text not null,
+  instructor_token text not null unique,
+  status text not null default 'lobby',
+  week int not null default 0,
+  team_count int not null,
+  total_weeks int not null default 12,
+  demand_revealed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists game_seats (
+  id serial primary key,
+  session_id text not null references game_sessions(id) on delete cascade,
+  team_index int not null,
+  role text not null,
+  handle text,
+  token text unique,
+  is_bot boolean not null default false,
+  unique (session_id, team_index, role)
+);
+
+create table if not exists game_teams (
+  session_id text not null references game_sessions(id) on delete cascade,
+  team_index int not null,
+  state_json text not null,
+  updated_at timestamptz not null default now(),
+  primary key (session_id, team_index)
+);
+
+create index if not exists game_seats_session_idx on game_seats (session_id);
+create index if not exists game_seats_token_idx on game_seats (token);
+`;
+
 function createNeonSql(): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
     // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
@@ -100,39 +137,16 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
 
-    // Auto-migrate tables on Neon if not already applied
+    // Directly ensure tables exist on Neon
     try {
-      const migrations = import.meta.glob("/migrations/*.sql", {
-        query: "?raw",
-        import: "default",
-        eager: true,
-      }) as Record<string, string>;
-
       const client = await pool.connect();
       try {
-        await client.query(
-          "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())",
-        );
-        const doneRows = await client.query<{ name: string }>(
-          "SELECT name FROM _migrations",
-        );
-        const done = doneRows.rows.map((r) => r.name);
-        for (const { name, path } of pendingMigrations(Object.keys(migrations), done)) {
-          await client.query("BEGIN");
-          try {
-            await client.query(migrations[path]);
-            await client.query("INSERT INTO _migrations (name) VALUES ($1)", [name]);
-            await client.query("COMMIT");
-          } catch (migErr) {
-            await client.query("ROLLBACK");
-            throw migErr;
-          }
-        }
+        await client.query(SCHEMA_SQL);
       } finally {
         client.release();
       }
     } catch (migErr) {
-      console.error("[db] Neon auto-migration error:", migErr);
+      console.error("[db] Neon schema init error:", migErr);
     }
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
