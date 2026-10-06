@@ -11,7 +11,7 @@ import {
   submitOrder,
   teamName,
   teamTotalCost,
-} from "./engine";
+} from "./engine.ts";
 import {
   MAX_ORDER,
   MIN_ORDER,
@@ -26,7 +26,7 @@ import {
   type SessionStatus,
   type TeamPublicResult,
   type TeamState,
-} from "./types";
+} from "./types.ts";
 
 const Handle = z
   .string()
@@ -67,7 +67,7 @@ function makePin(): string {
 }
 
 async function sql() {
-  const { getSql } = await import("@/lib/db");
+  const { getSql } = await import("../db.ts");
   return getSql();
 }
 
@@ -234,22 +234,23 @@ function seedBotOrders(state: TeamState, seats: SeatRow[]): TeamState {
 
 function maybeAdvance(state: TeamState, seats: SeatRow[]): TeamState {
   let next = state;
-  for (let i = 0; i < 16; i += 1) {
-    if (next.phase !== "ordering") break;
-    next = seedBotOrders(next, seats);
-    const humans = ROLES.filter((role) => {
-      const seat = seats.find((s) => s.role === role);
-      return Boolean(seat && !seat.is_bot && seat.token);
-    });
+  if (next.phase !== "ordering") return next;
+  next = seedBotOrders(next, seats);
+  const humans = ROLES.filter((role) => {
+    const seat = seats.find((s) => s.role === role);
+    return Boolean(seat && !seat.is_bot && seat.token);
+  });
+  if (humans.length > 0) {
     const humansDone = humans.every((role) => next.pendingOrders[role] != null);
-    if (!humansDone) break;
-    if (!ROLES.every((role) => next.pendingOrders[role] != null)) {
-      next = fillMissingWithBots(next);
-    }
-    next = applyOrders(next);
-    if (next.phase !== "finished") {
-      next = beginWeek(next);
-    }
+    if (!humansDone) return next;
+  }
+  if (!ROLES.every((role) => next.pendingOrders[role] != null)) {
+    next = fillMissingWithBots(next);
+  }
+  next = applyOrders(next);
+  if (next.phase !== "finished") {
+    next = beginWeek(next);
+    next = seedBotOrders(next, seats);
   }
   return next;
 }
@@ -371,11 +372,11 @@ export const startGame = createServerFn({ method: "POST" })
     for (const team of teams) {
       let state = parseState(team.state_json);
       state = beginWeek(state);
-      state = maybeAdvance(state, seats.filter((s) => s.team_index === team.team_index));
+      state = seedBotOrders(state, seats.filter((s) => s.team_index === team.team_index));
       await saveTeam(row.id, team.team_index, state);
-      row.week = state.week;
     }
     row.status = "playing";
+    row.week = 1;
     await saveSessionMeta(row);
     return instructorView(row);
   });
