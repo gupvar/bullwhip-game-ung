@@ -18,10 +18,13 @@ function InstructorGate() {
   const [code, setCode] = useState("");
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   async function create(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
+    setCreateError(null);
     try {
       const session = await createSession({ data: { teamCount } });
       setInstructorSession({
@@ -29,9 +32,15 @@ function InstructorGate() {
         roomCode: session.roomCode,
         pin: session.pin,
       });
-      await navigate({ to: "/instructor/session" });
+      if (typeof window !== "undefined") {
+        window.location.href = "/instructor/session";
+      } else {
+        await navigate({ to: "/instructor/session" });
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not open a room.");
+      const msg = err instanceof Error ? err.message : "Could not open a room.";
+      setCreateError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -40,6 +49,7 @@ function InstructorGate() {
   async function resume(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
+    setResumeError(null);
     try {
       const session = await instructorLogin({ data: { roomCode: code, pin } });
       setInstructorSession({
@@ -47,9 +57,15 @@ function InstructorGate() {
         roomCode: session.roomCode,
         pin: session.pin,
       });
-      await navigate({ to: "/instructor/session" });
+      if (typeof window !== "undefined") {
+        window.location.href = "/instructor/session";
+      } else {
+        await navigate({ to: "/instructor/session" });
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not sign in.");
+      const msg = err instanceof Error ? err.message : "Could not sign in.";
+      setResumeError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -99,8 +115,13 @@ function InstructorGate() {
                   ))}
                 </select>
               </div>
+              {createError ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  {createError}
+                </div>
+              ) : null}
               <Button type="submit" disabled={busy} size="lg">
-                Create room
+                {busy ? "Opening room..." : "Create room"}
               </Button>
             </form>
           </CardContent>
@@ -137,8 +158,13 @@ function InstructorGate() {
                   required
                 />
               </div>
+              {resumeError ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  {resumeError}
+                </div>
+              ) : null}
               <Button type="submit" variant="outline" disabled={busy} size="lg">
-                Open desk
+                {busy ? "Signing in..." : "Open desk"}
               </Button>
             </form>
           </CardContent>
