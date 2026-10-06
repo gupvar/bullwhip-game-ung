@@ -90,11 +90,11 @@ function InstructorGate() {
                   id="teams"
                   value={teamCount}
                   onChange={(e) => setTeamCount(Number(e.target.value))}
-                  className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm"
+                  className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm font-medium"
                 >
                   {TEAM_NAMES.map((name, i) => (
                     <option key={name} value={i + 1}>
-                      {i + 1} — {TEAM_NAMES.slice(0, i + 1).join(", ")}
+                      {i + 1} chain{i === 0 ? "" : "s"} ({ (i + 1) * 4 } seats) — {TEAM_NAMES.slice(0, i + 1).join(", ")}
                     </option>
                   ))}
                 </select>
