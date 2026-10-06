@@ -109,11 +109,12 @@ function err(message: string): never {
 
 async function loadSessionByCode(code: string): Promise<SessionRow> {
   const db = await sql();
+  const cleanCode = code.trim().toUpperCase();
   const rows = await db<SessionRow>`
     select id, room_code, instructor_pin, instructor_token, status, week, team_count, total_weeks, demand_revealed
-    from game_sessions where room_code = ${code}
+    from game_sessions where upper(trim(room_code)) = ${cleanCode}
   `;
-  return rows[0] ?? err("No lab found with that code.");
+  return rows[0] ?? err(`No lab found with code "${cleanCode}". Please check the room code on the instructor board.`);
 }
 
 async function loadSessionByInstructor(token: string): Promise<SessionRow> {
