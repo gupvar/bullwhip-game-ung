@@ -96,15 +96,28 @@ function InstructorSession() {
       />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Write this on the board
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-foreground bg-accent/10 px-2.5 py-1 rounded inline-block w-fit">
+              Room Code (Share with students)
             </p>
-            <h1 className="font-display text-4xl font-semibold tracking-[0.12em] text-navy">
-              {session.roomCode}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Instructor PIN {session.pin} · keep this one off the projector if you can
+            <div className="flex items-center gap-3">
+              <span className="font-display text-5xl font-bold tracking-[0.18em] text-navy select-all">
+                {session.roomCode}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const url = `${window.location.origin}/join?code=${session.roomCode}`;
+                  navigator.clipboard.writeText(url);
+                  toast.success(`Copied join link: ${url}`);
+                }}
+              >
+                Copy Student Join Link
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Instructor PIN: <span className="font-semibold text-foreground">{session.pin}</span> (keep PIN private)
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

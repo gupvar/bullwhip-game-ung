@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,16 @@ function JoinPage() {
   const [handle, setHandle] = useState("");
   const [lobby, setLobby] = useState<Awaited<ReturnType<typeof listOpenSeats>> | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const c = params.get("code");
+      if (c && c.length === 4) {
+        setCode(c.toUpperCase());
+      }
+    }
+  }, []);
 
   async function lookup(e: FormEvent) {
     e.preventDefault();
