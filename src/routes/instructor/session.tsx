@@ -135,7 +135,25 @@ function InstructorSession() {
           </div>
         </div>
 
-        {data ? (
+        {view.isError ? (
+          <div className="mt-6 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+            <p className="font-semibold">Unable to load instructor room</p>
+            <p className="mt-1">
+              {view.error instanceof Error ? view.error.message : "Instructor session expired or not found."}
+            </p>
+            <Button
+              className="mt-3"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                clearInstructorSession();
+                void navigate({ to: "/instructor" });
+              }}
+            >
+              Back to Instructor Desk
+            </Button>
+          </div>
+        ) : data ? (
           <p className="mt-4 text-sm text-muted-foreground">
             {data.status === "lobby"
               ? "Waiting in the lobby."
