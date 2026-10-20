@@ -13,6 +13,8 @@ import {
   teamTotalCost,
 } from "./engine.ts";
 import {
+  BOT_ONLY_WEEK_MS,
+  BOT_ORDER_DELAY_MS,
   MAX_ORDER,
   MAX_TEAMS,
   MIN_ORDER,
@@ -175,8 +177,7 @@ function seatInfos(seats: SeatRow[], teams: TeamRow[]): SeatInfo[] {
   const byTeam = new Map(teams.map((t) => [t.team_index, parseState(t.state_json)]));
   return seats.map((s) => {
     const state = byTeam.get(s.team_index);
-    const hasOrdered =
-      s.is_bot || (state?.pendingOrders[s.role] != null);
+    const hasOrdered = state?.pendingOrders[s.role] != null;
     return {
       teamIndex: s.team_index,
       role: s.role,
@@ -204,11 +205,164 @@ function toTeamResult(teamIndex: number, state: TeamState, seats: SeatRow[]): Te
     ),
     amplification: amplification(state.history),
     current: state.roles,
+    weekStartedAt: state.weekStartedAt,
   };
 }
 
-async function instructorView(row: SessionRow): Promise<InstructorView> {
+function humanRolesForTeam(seats: SeatRow[]): Role[] {
+  return ROLES.filter((role) => {
+    const seat = seats.find((s) => s.role === role);
+    return Boolean(seat && !seat.is_bot && seat.token);
+  });
+}
+
+function seedBotOrders(state: TeamState, seats: SeatRow[]): TeamState {
+  let next = state;
+  if (next.phase !== "ordering") return next;
+  for (const role of ROLES) {
+    if (next.pendingOrders[role] != null) continue;
+    const seat = seats.find((s) => s.role === role);
+    const isBot = !seat || seat.is_bot || !seat.token;
+    if (isBot) {
+      next = submitOrder(next, role, botOrder(next.roles[role]));
+    }
+  }
+  return next;
+}
+
+function maybeAdvance(state: TeamState, seats: SeatRow[], now = Date.now()): TeamState {
+  let next = state;
+  if (next.phase !== "ordering") return next;
+  next = seedBotOrders(next, seats);
+  const humans = humanRolesForTeam(seats);
+  if (humans.length > 0) {
+    const humansDone = humans.every((role) => next.pendingOrders[role] != null);
+    if (!humansDone) return next;
+  }
+  if (!ROLES.every((role) => next.pendingOrders[role] != null)) {
+    next = fillMissingWithBots(next);
+  }
+  next = applyOrders(next);
+  if (next.phase !== "finished") {
+    next = beginWeek(next, now);
+  }
+  return next;
+}
+
+/**
+ * Ensures computer players act within <= 30s (`BOT_ORDER_DELAY_MS = 3s`) and
+ * 100% computer-only chains actively play through all 12 weeks (`BOT_ONLY_WEEK_MS = 6s`/week).
+ */
+async function syncSessionBots(row: SessionRow): Promise<{
+  seats: SeatRow[];
+  teams: TeamRow[];
+}> {
   const [seats, teams] = await Promise.all([loadSeats(row.id), loadTeams(row.id)]);
+  if (row.status !== "playing") {
+    return { seats, teams };
+  }
+
+  const now = Date.now();
+  const parsed = teams.map((t) => ({
+    row: t,
+    state: parseState(t.state_json),
+    teamSeats: seats.filter((s) => s.team_index === t.team_index),
+  }));
+
+  const anyHumanTeamActive = parsed.some(
+    (p) => humanRolesForTeam(p.teamSeats).length > 0 && p.state.phase !== "finished",
+  );
+  const hasAnyHumanInRoom = parsed.some((p) => humanRolesForTeam(p.teamSeats).length > 0);
+
+  let anySessionMetaChanged = false;
+
+  for (const item of parsed) {
+    let { state } = item;
+    if (state.phase !== "ordering") continue;
+
+    let changed = false;
+    if (!state.weekStartedAt) {
+      state = { ...state, weekStartedAt: now };
+      changed = true;
+    }
+
+    const humans = humanRolesForTeam(item.teamSeats);
+    const elapsed = now - (state.weekStartedAt ?? now);
+
+    if (humans.length > 0) {
+      // Mixed human + computer chain: bots place orders after BOT_ORDER_DELAY_MS (3s)
+      // or immediately if all humans on this chain have already ordered.
+      const allHumansOrdered = humans.every((r) => state.pendingOrders[r] != null);
+      if (elapsed >= BOT_ORDER_DELAY_MS || allHumansOrdered) {
+        const beforeCount = Object.keys(state.pendingOrders).length;
+        state = seedBotOrders(state, item.teamSeats);
+        if (Object.keys(state.pendingOrders).length !== beforeCount) {
+          changed = true;
+        }
+      }
+      if (allHumansOrdered) {
+        state = maybeAdvance(state, item.teamSeats, now);
+        changed = true;
+      }
+    } else {
+      // 100% Computer-only chain:
+      // 1. Place bot orders within BOT_ORDER_DELAY_MS (3s)
+      if (elapsed >= BOT_ORDER_DELAY_MS) {
+        const beforeCount = Object.keys(state.pendingOrders).length;
+        state = seedBotOrders(state, item.teamSeats);
+        if (Object.keys(state.pendingOrders).length !== beforeCount) {
+          changed = true;
+        }
+      }
+      // 2. Advance weeks every BOT_ONLY_WEEK_MS (6s), or finish immediately if all human chains finished
+      const fastForwardToFinish = hasAnyHumanInRoom && !anyHumanTeamActive;
+      if (fastForwardToFinish) {
+        while (state.phase === "ordering") {
+          state = maybeAdvance(state, item.teamSeats, now);
+        }
+        changed = true;
+      } else if (elapsed >= BOT_ONLY_WEEK_MS) {
+        const steps = Math.max(1, Math.min(TOTAL_WEEKS, Math.floor(elapsed / BOT_ONLY_WEEK_MS)));
+        for (let s = 0; s < steps && state.phase === "ordering"; s += 1) {
+          const stepTime = (state.weekStartedAt ?? now) + BOT_ONLY_WEEK_MS;
+          state = maybeAdvance(state, item.teamSeats, stepTime > now ? now : stepTime);
+          if (state.phase === "ordering" && now - (state.weekStartedAt ?? now) >= BOT_ORDER_DELAY_MS) {
+            state = seedBotOrders(state, item.teamSeats);
+          }
+        }
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      item.state = state;
+      item.row.state_json = JSON.stringify(state);
+      await saveTeam(row.id, item.row.team_index, state);
+      anySessionMetaChanged = true;
+    }
+  }
+
+  const maxWeek = parsed.reduce((m, p) => Math.max(m, p.state.week), row.week);
+  const allFinished = parsed.length > 0 && parsed.every((p) => p.state.phase === "finished");
+  if (maxWeek !== row.week) {
+    row.week = maxWeek;
+    anySessionMetaChanged = true;
+  }
+  if (allFinished) {
+    row.status = "finished";
+    row.demand_revealed = true;
+    anySessionMetaChanged = true;
+  }
+
+  if (anySessionMetaChanged) {
+    await saveSessionMeta(row);
+  }
+
+  return { seats, teams: parsed.map((p) => p.row) };
+}
+
+async function instructorView(row: SessionRow): Promise<InstructorView> {
+  const { seats, teams } = await syncSessionBots(row);
   const firstState = teams[0] ? parseState(teams[0].state_json) : undefined;
   const edition: Edition = firstState?.edition ?? "ung";
   return {
@@ -228,43 +382,6 @@ async function instructorView(row: SessionRow): Promise<InstructorView> {
       ),
     ),
   };
-}
-
-function seedBotOrders(state: TeamState, seats: SeatRow[]): TeamState {
-  let next = state;
-  if (next.phase !== "ordering") return next;
-  for (const role of ROLES) {
-    if (next.pendingOrders[role] != null) continue;
-    const seat = seats.find((s) => s.role === role);
-    const isBot = !seat || seat.is_bot || !seat.token;
-    if (isBot) {
-      next = submitOrder(next, role, botOrder(next.roles[role]));
-    }
-  }
-  return next;
-}
-
-function maybeAdvance(state: TeamState, seats: SeatRow[]): TeamState {
-  let next = state;
-  if (next.phase !== "ordering") return next;
-  next = seedBotOrders(next, seats);
-  const humans = ROLES.filter((role) => {
-    const seat = seats.find((s) => s.role === role);
-    return Boolean(seat && !seat.is_bot && seat.token);
-  });
-  if (humans.length > 0) {
-    const humansDone = humans.every((role) => next.pendingOrders[role] != null);
-    if (!humansDone) return next;
-  }
-  if (!ROLES.every((role) => next.pendingOrders[role] != null)) {
-    next = fillMissingWithBots(next);
-  }
-  next = applyOrders(next);
-  if (next.phase !== "finished") {
-    next = beginWeek(next);
-    next = seedBotOrders(next, seats);
-  }
-  return next;
 }
 
 export const createSession = createServerFn({ method: "POST" })
@@ -420,11 +537,11 @@ export const startGame = createServerFn({ method: "POST" })
       set is_bot = true, handle = coalesce(handle, 'Computer')
       where session_id = ${row.id} and token is null
     `;
-    const [seats, teams] = await Promise.all([loadSeats(row.id), loadTeams(row.id)]);
+    const teams = await loadTeams(row.id);
+    const now = Date.now();
     for (const team of teams) {
       let state = parseState(team.state_json);
-      state = beginWeek(state);
-      state = seedBotOrders(state, seats.filter((s) => s.team_index === team.team_index));
+      state = beginWeek(state, now);
       await saveTeam(row.id, team.team_index, state);
     }
     row.status = "playing";
@@ -475,18 +592,8 @@ export const instructorPlaceOrder = createServerFn({ method: "POST" })
     let state = parseState(team.state_json);
     if (state.pendingOrders[data.role] != null) err("That seat already ordered this week.");
     state = submitOrder(state, data.role, data.quantity);
-    state = maybeAdvance(state, seats);
+    state = maybeAdvance(state, seats, Date.now());
     await saveTeam(row.id, data.teamIndex, state);
-    if (state.phase === "finished") {
-      const all = await loadTeams(row.id);
-      const done = all.every((t) => parseState(t.state_json).phase === "finished");
-      if (done) {
-        row.status = "finished";
-        row.demand_revealed = true;
-      }
-    }
-    row.week = state.week;
-    await saveSessionMeta(row);
     return instructorView(row);
   });
 
@@ -520,13 +627,14 @@ function boardFrom(
       seat.role === "retailer" || demandRevealed || state.phase === "finished"
         ? roleState.lastDemand
         : null,
+    weekStartedAt: state.weekStartedAt,
     teammates: ROLES.filter((r) => r !== seat.role).map((role) => {
       const t = teammates.find((s) => s.role === role);
       return {
         role,
         handle: t?.handle ?? null,
         isBot: t?.is_bot ?? false,
-        hasOrdered: state.pendingOrders[role] != null || Boolean(t?.is_bot),
+        hasOrdered: state.pendingOrders[role] != null,
       };
     }),
     ownHistory: state.history.map((h) => ({
@@ -556,14 +664,10 @@ export const getSeatView = createServerFn({ method: "POST" })
       from game_sessions where id = ${seat.session_id}
     `;
     const session = sessions[0] ?? err("Lab not found.");
-    const teamRows = await db<TeamRow>`
-      select session_id, team_index, state_json
-      from game_teams
-      where session_id = ${session.id} and team_index = ${seat.team_index}
-    `;
-    const team = teamRows[0] ?? err("Team missing.");
+    const { seats: allSeats, teams } = await syncSessionBots(session);
+    const team = teams.find((t) => t.team_index === seat.team_index) ?? err("Team missing.");
     const state = parseState(team.state_json);
-    const teammates = (await loadSeats(session.id)).filter((s) => s.team_index === seat.team_index);
+    const teammates = allSeats.filter((s) => s.team_index === seat.team_index);
     const debrief =
       state.phase === "finished" || session.demand_revealed
         ? toTeamResult(seat.team_index, state, teammates)
@@ -613,28 +717,24 @@ export const placeOrder = createServerFn({ method: "POST" })
     if (state.pendingOrders[seat.role] != null) err("You already ordered this week.");
     const teammates = (await loadSeats(session.id)).filter((s) => s.team_index === seat.team_index);
     state = submitOrder(state, seat.role, data.quantity);
-    state = maybeAdvance(state, teammates);
+    state = maybeAdvance(state, teammates, Date.now());
     await saveTeam(session.id, seat.team_index, state);
-    if (state.phase === "finished") {
-      const all = await loadTeams(session.id);
-      const done = all.every((t) => parseState(t.state_json).phase === "finished");
-      if (done) {
-        session.status = "finished";
-        session.demand_revealed = true;
-      }
-    }
-    session.week = state.week;
-    await saveSessionMeta(session);
+
+    const { seats: syncedSeats, teams: syncedTeams } = await syncSessionBots(session);
+    const updatedTeam = syncedTeams.find((t) => t.team_index === seat.team_index) ?? team;
+    const updatedState = parseState(updatedTeam.state_json);
+    const updatedTeammates = syncedSeats.filter((s) => s.team_index === seat.team_index);
+
     const debrief =
-      state.phase === "finished" || session.demand_revealed
-        ? toTeamResult(seat.team_index, state, teammates)
+      updatedState.phase === "finished" || session.demand_revealed
+        ? toTeamResult(seat.team_index, updatedState, updatedTeammates)
         : null;
     const view: SeatView = {
       roomCode: session.room_code,
       status: session.status,
       demandRevealed: session.demand_revealed,
-      edition: state.edition ?? "ung",
-      board: boardFrom(state, seat, teammates, session.demand_revealed),
+      edition: updatedState.edition ?? "ung",
+      board: boardFrom(updatedState, seat, updatedTeammates, session.demand_revealed),
       debrief,
     };
     return view;

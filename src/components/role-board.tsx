@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Pencil, Warehouse, Check, X } from "lucide-react";
+import { Bot, Check, Pencil, User, Warehouse, X } from "lucide-react";
+import { OrderStepper } from "@/components/order-stepper";
+import { RoundTimer } from "@/components/round-timer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { OrderStepper } from "@/components/order-stepper";
 import { useEdition } from "@/lib/game/edition";
 import {
   ROLE_LABEL,
@@ -58,7 +59,7 @@ export function RoleBoard({
   showMarket?: boolean;
   onRenameTeam?: (newName: string) => Promise<void> | void;
 }) {
-  const { config } = useEdition();
+  const { edition, config } = useEdition();
   const [editingTeam, setEditingTeam] = useState(false);
   const [teamDraft, setTeamDraft] = useState(board.teamName);
   const [savingName, setSavingName] = useState(false);
@@ -145,6 +146,14 @@ export function RoleBoard({
         <Badge variant="gold">{config.productBadge}</Badge>
       </div>
 
+      {edition === "general" && board.phase === "ordering" ? (
+        <RoundTimer
+          weekStartedAt={board.weekStartedAt}
+          week={board.week}
+          phase={board.phase}
+        />
+      ) : null}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Received this week" value={board.lastReceived} />
         <Stat
@@ -163,6 +172,43 @@ export function RoleBoard({
           tone={board.backorder > 0 ? "warn" : "ink"}
         />
       </div>
+
+      {edition === "general" && board.phase === "ordering" && board.teammates.length > 0 ? (
+        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-card p-3 text-xs">
+          {board.teammates.map((t) => (
+            <div
+              key={t.role}
+              className="flex items-center justify-between gap-1.5 rounded-lg bg-muted/50 px-2.5 py-2"
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                {t.isBot ? (
+                  <Bot className="size-3.5 shrink-0 text-teal" />
+                ) : (
+                  <User className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <div className="truncate">
+                  <span className="block font-medium text-foreground">
+                    {ROLE_LABEL[t.role]}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {t.isBot ? "Computer (≤30s)" : t.handle ?? "Open"}
+                  </span>
+                </div>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                  t.hasOrdered
+                    ? "bg-teal/15 text-teal"
+                    : "bg-amber-500/15 text-amber-700",
+                )}
+              >
+                {t.hasOrdered ? "Ready" : "Ordering…"}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <Card>
         <CardContent className="flex flex-col gap-4">

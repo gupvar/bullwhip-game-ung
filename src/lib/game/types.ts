@@ -10,6 +10,13 @@ export const SURGE_WEEK = 5;
 export const MAX_ORDER = 30;
 export const MIN_ORDER = 0;
 
+/** Target decision window per week (seconds) shown on the visual timer. */
+export const ROUND_TIMER_SECONDS = 30;
+/** Delay before computer seats lock in their order each week (ms) — always <= 30s. */
+export const BOT_ORDER_DELAY_MS = 3000;
+/** Step interval for 100% computer-only chains to advance a full week (ms) — always <= 30s. */
+export const BOT_ONLY_WEEK_MS = 6000;
+
 export type Edition = "ung" | "general";
 
 /** Classic four-echelon classroom chain (retailer → factory). */
@@ -154,6 +161,7 @@ export interface TeamState {
   history: WeekRecord[];
   customName?: string;
   edition?: Edition;
+  weekStartedAt?: number;
 }
 
 export interface SeatInfo {
@@ -194,6 +202,7 @@ export interface RoleBoardView {
   totalCost: number;
   pendingOrder: number | null;
   customerDemand: number | null;
+  weekStartedAt?: number;
   teammates: Array<{
     role: Role;
     handle: string | null;
@@ -224,6 +233,7 @@ export interface TeamPublicResult {
   seats: SeatInfo[];
   amplification: Record<Role, number>;
   current: Record<Role, RoleState>;
+  weekStartedAt?: number;
 }
 
 export interface InstructorView {

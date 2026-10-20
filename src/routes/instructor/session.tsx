@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Check, Pencil, X } from "lucide-react";
+import { Bot, Check, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { DebriefPanel } from "@/components/debrief-panel";
+import { RoundTimer } from "@/components/round-timer";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,9 @@ function InstructorSession() {
   if (!session) return null;
   const data = view.data;
   const activeEdition = data?.edition ?? edition;
+  const activeOrderingTeam =
+    data?.teams.find((t) => t.phase === "ordering" && t.seats.some((s) => !s.isBot)) ??
+    data?.teams.find((t) => t.phase === "ordering");
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -198,139 +202,170 @@ function InstructorSession() {
             </Button>
           </div>
         ) : data ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            {data.status === "lobby"
-              ? "Waiting in the lobby."
-              : data.status === "finished"
-                ? "Lab complete — debrief below."
-                : `Live · week ${data.week} of ${data.totalWeeks}`}
-          </p>
+          <div className="mt-4 flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              {data.status === "lobby"
+                ? "Waiting in the lobby."
+                : data.status === "finished"
+                  ? "Lab complete — debrief below."
+                  : `Live · week ${data.week} of ${data.totalWeeks}`}
+            </p>
+            {activeEdition === "general" && data.status === "playing" && activeOrderingTeam ? (
+              <RoundTimer
+                weekStartedAt={activeOrderingTeam.weekStartedAt}
+                week={activeOrderingTeam.week}
+                phase={activeOrderingTeam.phase}
+              />
+            ) : null}
+          </div>
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">Loading desk…</p>
         )}
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {data?.teams.map((team) => (
-            <Card key={team.teamIndex}>
-              <CardHeader className="flex flex-row items-start justify-between gap-2">
-                <div>
-                  {editingTeamIdx === team.teamIndex ? (
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        value={teamDraft}
-                        onChange={(e) => setTeamDraft(e.target.value)}
-                        maxLength={28}
-                        className="h-8 w-44 text-sm"
-                        placeholder="Team name"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 px-2"
-                        onClick={() => void handleRenameTeam(team.teamIndex)}
-                      >
-                        <Check className="size-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2"
-                        onClick={() => setEditingTeamIdx(null)}
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <CardTitle>{team.teamName}</CardTitle>
-                      {activeEdition === "general" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTeamDraft(team.teamName);
-                            setEditingTeamIdx(team.teamIndex);
-                          }}
-                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                          title="Rename team"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    Cost ${team.totalCost}
-                    {team.phase === "ordering" ? ` · week ${team.week}` : ""}
-                  </p>
-                </div>
-                <Badge variant={team.phase === "finished" ? "gold" : "muted"}>
-                  {team.phase}
-                </Badge>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {ROLES.map((role) => {
-                  const seat = team.seats.find((s) => s.role === role);
-                  const current = team.current[role];
-                  return (
-                    <div
-                      key={role}
-                      className="rounded-lg border border-border bg-muted/50 px-3 py-3"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium">
-                          {ROLE_LABEL[role]}{" "}
-                          <span className="font-normal text-muted-foreground">
-                            {seat?.isBot ? "Computer" : seat?.handle ?? "Empty"}
-                          </span>
-                        </p>
-                        <p className="text-xs tabular-nums text-muted-foreground">
-                          {team.pendingOrders[role] != null
-                            ? `Ordered ${team.pendingOrders[role]}`
-                            : team.phase === "ordering"
-                              ? "Waiting"
-                              : ""}
-                        </p>
-                      </div>
-                      <dl className="mt-2 grid grid-cols-4 gap-2 text-center text-xs">
-                        <Mini label="On hand" value={current.inventory} />
-                        <Mini label="Owed" value={current.backorder} />
-                        <Mini label="Demand" value={current.lastDemand} />
-                        <Mini label="Last order" value={current.lastOrder} />
-                      </dl>
-                      {data.status === "playing" &&
-                      team.phase === "ordering" &&
-                      team.pendingOrders[role] == null &&
-                      !seat?.isBot ? (
-                        <HelpOrder
-                          onSend={(qty) =>
-                            instructorPlaceOrder({
-                              data: {
-                                token: session.token,
-                                teamIndex: team.teamIndex,
-                                role,
-                                quantity: qty,
-                              },
-                            }).then((next) => {
-                              queryClient.setQueryData(
-                                ["instructor", session.token],
-                                next,
-                              );
-                            }).catch((err) => {
-                              toast.error(
-                                err instanceof Error ? err.message : "Could not order.",
-                              );
-                            })
-                          }
+          {data?.teams.map((team) => {
+            const isAllBotChain =
+              team.seats.length > 0 && team.seats.every((s) => s.isBot);
+            return (
+              <Card key={team.teamIndex}>
+                <CardHeader className="flex flex-row items-start justify-between gap-2">
+                  <div>
+                    {editingTeamIdx === team.teamIndex ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={teamDraft}
+                          onChange={(e) => setTeamDraft(e.target.value)}
+                          maxLength={28}
+                          className="h-8 w-44 text-sm"
+                          placeholder="Team name"
                         />
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2"
+                          onClick={() => void handleRenameTeam(team.teamIndex)}
+                        >
+                          <Check className="size-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => setEditingTeamIdx(null)}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle>{team.teamName}</CardTitle>
+                        {activeEdition === "general" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTeamDraft(team.teamName);
+                              setEditingTeamIdx(team.teamIndex);
+                            }}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Rename team"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                        ) : null}
+                        {isAllBotChain && data.status !== "lobby" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal">
+                            <Bot className="size-3" /> All-Computer Chain
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      Cost ${team.totalCost}
+                      {team.phase === "ordering" ? ` · week ${team.week}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {activeEdition === "general" && team.phase === "ordering" ? (
+                      <RoundTimer
+                        weekStartedAt={team.weekStartedAt}
+                        week={team.week}
+                        phase={team.phase}
+                        compact
+                        isAllBotChain={isAllBotChain}
+                      />
+                    ) : null}
+                    <Badge variant={team.phase === "finished" ? "gold" : "muted"}>
+                      {team.phase}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {ROLES.map((role) => {
+                    const seat = team.seats.find((s) => s.role === role);
+                    const current = team.current[role];
+                    return (
+                      <div
+                        key={role}
+                        className="rounded-lg border border-border bg-muted/50 px-3 py-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">
+                            {ROLE_LABEL[role]}{" "}
+                            <span className="font-normal text-muted-foreground">
+                              {seat?.isBot ? "Computer" : seat?.handle ?? "Empty"}
+                            </span>
+                          </p>
+                          <p className="text-xs tabular-nums text-muted-foreground">
+                            {team.pendingOrders[role] != null
+                              ? `Ordered ${team.pendingOrders[role]}`
+                              : team.phase === "ordering"
+                                ? seat?.isBot
+                                  ? "Computer thinking (≤30s)…"
+                                  : "Waiting"
+                                : ""}
+                          </p>
+                        </div>
+                        <dl className="mt-2 grid grid-cols-4 gap-2 text-center text-xs">
+                          <Mini label="On hand" value={current.inventory} />
+                          <Mini label="Owed" value={current.backorder} />
+                          <Mini label="Demand" value={current.lastDemand} />
+                          <Mini label="Last order" value={current.lastOrder} />
+                        </dl>
+                        {data.status === "playing" &&
+                        team.phase === "ordering" &&
+                        team.pendingOrders[role] == null &&
+                        !seat?.isBot ? (
+                          <HelpOrder
+                            onSend={(qty) =>
+                              instructorPlaceOrder({
+                                data: {
+                                  token: session.token,
+                                  teamIndex: team.teamIndex,
+                                  role,
+                                  quantity: qty,
+                                },
+                              }).then((next) => {
+                                queryClient.setQueryData(
+                                  ["instructor", session.token],
+                                  next,
+                                );
+                              }).catch((err) => {
+                                toast.error(
+                                  err instanceof Error ? err.message : "Could not order.",
+                                );
+                              })
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {data?.teams.some((t) => t.history.length > 0) ? (

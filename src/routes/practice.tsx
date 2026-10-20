@@ -52,6 +52,7 @@ function boardView(state: TeamState, role: Role, handle: string, edition: Editio
     totalCost: r.totalCost,
     pendingOrder: state.pendingOrders[role] ?? null,
     customerDemand: role === "retailer" || state.phase === "finished" ? r.lastDemand : null,
+    weekStartedAt: state.weekStartedAt,
     teammates: ROLES.filter((x) => x !== role).map((x) => ({
       role: x,
       handle: "Computer",
@@ -90,6 +91,7 @@ function toResult(state: TeamState, edition: Edition): TeamPublicResult {
     })),
     amplification: amplification(state.history),
     current: state.roles,
+    weekStartedAt: state.weekStartedAt,
   };
 }
 
@@ -108,7 +110,14 @@ function PracticePage() {
   );
 
   function start() {
-    const next = beginWeek(createTeamState(edition));
+    let next = beginWeek(createTeamState(edition));
+    if (mode !== "all") {
+      for (const role of ROLES) {
+        if (role !== mode) {
+          next = submitOrder(next, role, botOrder(next.roles[role]));
+        }
+      }
+    }
     setState(next);
     setStarted(true);
     const first = mode === "all" ? "retailer" : mode;
@@ -139,6 +148,13 @@ function PracticePage() {
     next = applyOrders(next);
     if (next.phase !== "finished") {
       next = beginWeek(next);
+      if (mode !== "all") {
+        for (const role of ROLES) {
+          if (role !== mode) {
+            next = submitOrder(next, role, botOrder(next.roles[role]));
+          }
+        }
+      }
       const nextFocus = mode === "all" ? "retailer" : mode;
       setFocus(nextFocus);
       setQty(next.roles[nextFocus].lastDemand);
@@ -155,7 +171,7 @@ function PracticePage() {
             <h1 className="font-display text-4xl font-semibold text-navy">Practice lab</h1>
             <p className="text-muted-foreground text-pretty">
               {isGeneral
-                ? "Same 12-week supply chain simulation, no classmates required. Play every seat to feel the delay — that is how an instructor can also demo the lab before class — or hold one seat and let a simple computer rule run the others."
+                ? "Same 12-week supply chain simulation, no classmates required. Play every seat to feel the delay — that is how an instructor can also demo the lab before class — or hold one seat and let a rational base-stock computer rule run the others."
                 : "Same 12-week Nighthawk gear chain, no classmates required. Play every seat to feel the delay — that is how an instructor can also demo the lab before class — or hold one seat and let a simple computer rule run the others."}
             </p>
             <div className="flex flex-col gap-2">
@@ -173,7 +189,7 @@ function PracticePage() {
                     selected={mode === role}
                     onClick={() => setMode(role)}
                     label={`${ROLE_LABEL[role]} only`}
-                    hint="Computers fill the other two seats"
+                    hint="Rational computers fill the other three seats"
                   />
                 ))}
               </div>

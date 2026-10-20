@@ -97,7 +97,7 @@ export function SiteHeader({
               solid ? "hover:bg-navy-deep" : "hover:bg-muted",
             )}
           >
-            How to play
+            How to play & FAQ
           </Link>
           {right}
         </nav>

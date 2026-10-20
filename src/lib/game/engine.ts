@@ -89,7 +89,7 @@ function cloneState(state: TeamState): TeamState {
  * Open a week: receive inbound goods, fill this week's demand, pay costs.
  * Players then submit the only decision — how many units to order.
  */
-export function beginWeek(state: TeamState): TeamState {
+export function beginWeek(state: TeamState, now = Date.now()): TeamState {
   const next = cloneState(state);
   if (next.phase === "finished") return next;
   if (next.week >= TOTAL_WEEKS) {
@@ -101,6 +101,7 @@ export function beginWeek(state: TeamState): TeamState {
   next.week = week;
   next.phase = "ordering";
   next.pendingOrders = {};
+  next.weekStartedAt = now;
 
   const demand = byRole((role) => {
     const down = DOWNSTREAM[role];
@@ -160,12 +161,18 @@ export function allOrdersIn(state: TeamState): boolean {
 }
 
 /**
- * Naive-but-stable classroom bot: order this week's demand, plus a nudge
- * back toward the starting on-hand of 12.
+ * Rational base-stock (order-up-to) computer player using ONLY local seat
+ * information (no knowledge of the external consumer demand schedule):
+ * - Replaces this week's observed downstream demand (`role.lastDemand`)
+ * - Adjusts half of the net-inventory gap (`START_INVENTORY - (inventory - backorder)`)
+ * - Adjusts half of the pipeline gap (`lastDemand - incoming`) so it does not
+ *   double-order units already in transit.
  */
 export function botOrder(role: RoleState): number {
-  const gap = START_INVENTORY - role.inventory;
-  return clampOrder(role.lastDemand + gap);
+  const netInventory = role.inventory - role.backorder;
+  const inventoryGap = START_INVENTORY - netInventory;
+  const pipelineGap = role.lastDemand - role.incoming;
+  return clampOrder(role.lastDemand + 0.5 * inventoryGap + 0.5 * pipelineGap);
 }
 
 export function fillMissingWithBots(state: TeamState): TeamState {

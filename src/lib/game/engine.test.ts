@@ -6,6 +6,7 @@ import {
   botOrder,
   createTeamState,
   customerDemand,
+  fillMissingWithBots,
   playWeek,
   STEADY_ORDERS,
   submitOrder,
@@ -13,7 +14,7 @@ import {
   teamTotalCost,
   variance,
 } from "./engine.ts";
-import { BASE_DEMAND, ROLES, SURGE_DEMAND, SURGE_WEEK } from "./types.ts";
+import { BASE_DEMAND, ROLES, SURGE_DEMAND, SURGE_WEEK, TOTAL_WEEKS } from "./types.ts";
 
 describe("customerDemand", () => {
   it("holds at 4 then jumps to 8 in homecoming week", () => {
@@ -85,10 +86,41 @@ describe("orders", () => {
   });
 });
 
-describe("botOrder", () => {
-  it("stays near 12 when the board is already steady", () => {
+describe("botOrder (rational base-stock with pipeline accounting)", () => {
+  it("stays at 4 when the board is steady", () => {
     const state = beginWeek(createTeamState());
     assert.equal(botOrder(state.roles.retailer), 4);
+  });
+
+  it("accounts for backorders and inbound pipeline without knowing future demand", () => {
+    const state = beginWeek(createTeamState());
+    // Suppose inventory is 0, backorder is 6, incoming is 8, lastDemand is 8:
+    // netInventory = -6 -> inventoryGap = 12 - (-6) = 18
+    // pipelineGap = 8 - 8 = 0
+    // order = 8 + 0.5*18 + 0 = 17
+    const stressed = {
+      ...state.roles.retailer,
+      inventory: 0,
+      backorder: 6,
+      incoming: 8,
+      lastDemand: 8,
+    };
+    assert.equal(botOrder(stressed), 17);
+  });
+
+  it("plays a full 12-week all-computer chain to completion", () => {
+    let state = createTeamState("general");
+    for (let w = 1; w <= TOTAL_WEEKS; w += 1) {
+      state = beginWeek(state, 1000 * w);
+      assert.equal(state.weekStartedAt, 1000 * w);
+      state = fillMissingWithBots(state);
+      state = applyOrders(state);
+    }
+    assert.equal(state.phase, "finished");
+    assert.equal(state.history.length, TOTAL_WEEKS);
+    // Retailer orders 4 in weeks 1-4, then increases in week 5 when demand jumps to 8
+    assert.equal(state.history[0]?.roles.retailer.order, 4);
+    assert.ok((state.history[4]?.roles.retailer.order ?? 0) > 8);
   });
 });
 
