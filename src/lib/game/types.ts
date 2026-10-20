@@ -236,6 +236,34 @@ export interface TeamPublicResult {
   weekStartedAt?: number;
 }
 
+export interface LeaderboardTeamSnapshot {
+  teamIndex: number;
+  teamName: string;
+  phase: TeamPhase;
+  currentWeek: number;
+  completedWeeks: number;
+  totalCost: number;
+  roleCosts: Record<Role, number>;
+  isAllBot: boolean;
+  seats: Array<{
+    role: Role;
+    handle: string;
+    isBot: boolean;
+  }>;
+  /** Cumulative costs after each completed week (1..completedWeeks) */
+  cumulativeByWeek: Array<{
+    week: number;
+    totalCost: number;
+    roleCosts: Record<Role, number>;
+  }>;
+}
+
+export interface SessionLeaderboard {
+  maxCompletedWeek: number;
+  maxCurrentWeek: number;
+  teams: LeaderboardTeamSnapshot[];
+}
+
 export interface InstructorView {
   roomCode: string;
   pin: string;
@@ -246,6 +274,7 @@ export interface InstructorView {
   demandRevealed: boolean;
   edition?: Edition;
   teams: TeamPublicResult[];
+  leaderboard?: SessionLeaderboard;
 }
 
 export interface SeatView {
@@ -255,4 +284,5 @@ export interface SeatView {
   edition?: Edition;
   board: RoleBoardView;
   debrief: TeamPublicResult | null;
+  leaderboard?: SessionLeaderboard;
 }

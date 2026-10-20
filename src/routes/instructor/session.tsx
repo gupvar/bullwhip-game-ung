@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Bot, Check, Pencil, X } from "lucide-react";
+import { Bot, Check, FileSpreadsheet, ImageDown, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { DebriefPanel } from "@/components/debrief-panel";
+import { LeaderboardPanel } from "@/components/leaderboard-panel";
 import { RoundTimer } from "@/components/round-timer";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,11 @@ import {
   startGame,
 } from "@/lib/game/api";
 import { useEdition } from "@/lib/game/edition";
+import {
+  downloadAllTeamsChartsPng,
+  downloadSummaryCsv,
+  downloadWeeklyCsv,
+} from "@/lib/game/leaderboard";
 import {
   clearInstructorSession,
   getInstructorSession,
@@ -116,6 +122,7 @@ function InstructorSession() {
   const activeOrderingTeam =
     data?.teams.find((t) => t.phase === "ordering" && t.seats.some((s) => !s.isBot)) ??
     data?.teams.find((t) => t.phase === "ordering");
+  const hasAnyHistory = Boolean(data?.teams.some((t) => t.history.length > 0));
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -166,13 +173,56 @@ function InstructorSession() {
                 </Button>
               </>
             ) : null}
+            {data && data.status !== "lobby" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    downloadWeeklyCsv(data);
+                    toast.success("Downloaded weekly game data CSV.");
+                  }}
+                >
+                  <FileSpreadsheet className="size-4" />
+                  <span>Weekly CSV</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    downloadSummaryCsv(data);
+                    toast.success("Downloaded summary & leaderboard CSV.");
+                  }}
+                >
+                  <FileSpreadsheet className="size-4" />
+                  <span>Summary CSV</span>
+                </Button>
+                {hasAnyHistory ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => {
+                      downloadAllTeamsChartsPng(data.teams, data.roomCode);
+                      toast.success("Downloaded all chain graphs as PNG.");
+                    }}
+                  >
+                    <ImageDown className="size-4" />
+                    <span>All Graphs (PNG)</span>
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
             {data && data.status !== "lobby" && !data.demandRevealed ? (
-              <Button variant="outline" onClick={() => reveal.mutate()}>
+              <Button variant="outline" size="sm" onClick={() => reveal.mutate()}>
                 Reveal shopper demand
               </Button>
             ) : null}
             <Button
               variant="ghost"
+              size="sm"
               onClick={() => {
                 clearInstructorSession();
                 setSession(null);
@@ -207,7 +257,7 @@ function InstructorSession() {
               {data.status === "lobby"
                 ? "Waiting in the lobby."
                 : data.status === "finished"
-                  ? "Lab complete — debrief below."
+                  ? "Lab complete — leaderboards and debrief below."
                   : `Live · week ${data.week} of ${data.totalWeeks}`}
             </p>
             {activeEdition === "general" && data.status === "playing" && activeOrderingTeam ? (
@@ -221,6 +271,12 @@ function InstructorSession() {
         ) : (
           <p className="mt-4 text-sm text-muted-foreground">Loading desk…</p>
         )}
+
+        {data && data.status !== "lobby" && data.leaderboard ? (
+          <div className="mt-6">
+            <LeaderboardPanel leaderboard={data.leaderboard} />
+          </div>
+        ) : null}
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {data?.teams.map((team) => {
@@ -368,7 +424,7 @@ function InstructorSession() {
           })}
         </div>
 
-        {data?.teams.some((t) => t.history.length > 0) ? (
+        {hasAnyHistory && data ? (
           <div className="mt-10 flex flex-col gap-12">
             {data.teams.map((team) =>
               team.history.length ? (

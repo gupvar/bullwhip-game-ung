@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Download } from "lucide-react";
 import {
   CartesianGrid,
   Legend,
@@ -9,6 +10,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Button } from "@/components/ui/button";
+import { downloadTeamChartPng } from "@/lib/game/leaderboard";
 import { ROLE_LABEL, ROLES, type TeamPublicResult } from "@/lib/game/types";
 
 const NAVY = "#1f3d7c";
@@ -52,7 +55,11 @@ export function BullwhipCharts({ result }: { result: TeamPublicResult }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <ChartCard title="Orders vs. shopper demand" hint="The whip is the widening swing as you move upstream.">
+      <ChartCard
+        title="Orders vs. shopper demand"
+        hint="The whip is the widening swing as you move upstream."
+        onDownload={() => downloadTeamChartPng(result, "orders")}
+      >
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={orderData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
             <CartesianGrid stroke="#e6e0d4" strokeDasharray="3 3" />
@@ -68,7 +75,11 @@ export function BullwhipCharts({ result }: { result: TeamPublicResult }) {
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
-      <ChartCard title="On-hand minus backorders" hint="Below zero means the seat still owes units.">
+      <ChartCard
+        title="On-hand minus backorders"
+        hint="Below zero means the seat still owes units."
+        onDownload={() => downloadTeamChartPng(result, "inventory")}
+      >
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={stockData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
             <CartesianGrid stroke="#e6e0d4" strokeDasharray="3 3" />
@@ -103,16 +114,35 @@ export function BullwhipCharts({ result }: { result: TeamPublicResult }) {
 function ChartCard({
   title,
   hint,
+  onDownload,
   children,
 }: {
   title: string;
   hint: string;
+  onDownload?: () => void;
   children: ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-border)]">
-      <h3 className="font-display text-lg font-semibold text-navy">{title}</h3>
-      <p className="mb-3 text-xs text-muted-foreground">{hint}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-navy">{title}</h3>
+          <p className="mb-3 text-xs text-muted-foreground">{hint}</p>
+        </div>
+        {onDownload ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs gap-1"
+            onClick={onDownload}
+            title="Download graph as PNG image"
+          >
+            <Download className="size-3.5" />
+            <span>PNG</span>
+          </Button>
+        ) : null}
+      </div>
       {children}
     </div>
   );

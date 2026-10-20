@@ -140,6 +140,26 @@ async function run() {
     await genStudent.waitForSelector("text=Week 2 of 12", { timeout: 5000 });
     console.log("✔ Student's mixed chain also advanced to Week 2 of 12!");
 
+    // Verify Live Leaderboards (Overall & By Role) on both Student and Instructor views
+    await genStudent.waitForSelector("text=Live Leaderboards (Overall & By Role)", { timeout: 5000 });
+    await genStudent.locator("button[role='tab']:has-text('Retailers')").click();
+    await genStudent.waitForSelector("text=Alex General", { timeout: 5000 });
+    console.log("✔ Verified Overall & By-Role Leaderboards on Student Board!");
+
+    await genInstructor.waitForSelector("text=Live Leaderboards (Overall & By Role)", { timeout: 5000 });
+    await genInstructor.locator("button[role='tab']:has-text('Retailers')").click();
+    await genInstructor.waitForSelector("text=Alex General", { timeout: 5000 });
+    await genInstructor.locator("button[role='tab']:has-text('Overall Chains')").click();
+    await genInstructor.locator("#leaderboard-week").selectOption("1");
+    console.log("✔ Verified Overall, By-Role, and After-Week-1 Leaderboards on Instructor Desk!");
+
+    // Verify CSV and Graph PNG export buttons on Instructor Desk
+    await genInstructor.waitForSelector("button:has-text('Weekly CSV')", { timeout: 5000 });
+    await genInstructor.waitForSelector("button:has-text('Summary CSV')", { timeout: 5000 });
+    await genInstructor.waitForSelector("button:has-text('All Graphs (PNG)')", { timeout: 5000 });
+    await genInstructor.waitForSelector("button:has-text('Download Graphs (PNG)')", { timeout: 5000 });
+    console.log("✔ Verified Weekly CSV, Summary CSV, and PNG Graph Download buttons on Instructor Desk!");
+
     await genContext.close();
 
     console.log("\n=======================================================");

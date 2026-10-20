@@ -1,5 +1,8 @@
+import { ImageDown } from "lucide-react";
 import { BullwhipCharts } from "@/components/bullwhip-charts";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { downloadTeamChartPng } from "@/lib/game/leaderboard";
 import { ROLE_LABEL, ROLES, type TeamPublicResult } from "@/lib/game/types";
 
 export function DebriefPanel({
@@ -11,12 +14,28 @@ export function DebriefPanel({
 }) {
   return (
     <section className="flex flex-col gap-5">
-      <div>
-        <h2 className="font-display text-2xl font-semibold text-navy">{title}</h2>
-        <p className="text-sm text-muted-foreground">
-          {result.teamName} · total cost{" "}
-          <span className="font-medium tabular-nums text-foreground">${result.totalCost}</span>
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-navy">{title}</h2>
+          <p className="text-sm text-muted-foreground">
+            {result.teamName} · total cost{" "}
+            <span className="font-medium tabular-nums text-foreground">
+              ${result.totalCost}
+            </span>
+          </p>
+        </div>
+        {result.history.length > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => downloadTeamChartPng(result, "both")}
+          >
+            <ImageDown className="size-4" />
+            <span>Download Graphs (PNG)</span>
+          </Button>
+        ) : null}
       </div>
       <BullwhipCharts result={result} />
       <Card>

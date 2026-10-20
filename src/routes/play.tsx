@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { DebriefPanel } from "@/components/debrief-panel";
+import { LeaderboardPanel } from "@/components/leaderboard-panel";
 import { RoleBoard } from "@/components/role-board";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
@@ -128,6 +129,16 @@ function PlayPage() {
           <p className="text-sm text-muted-foreground">Loading your board…</p>
         )}
 
+        {view.data && view.data.status !== "lobby" && view.data.leaderboard ? (
+          <div className="mt-8">
+            <LeaderboardPanel
+              leaderboard={view.data.leaderboard}
+              highlightTeamIndex={view.data.board.teamIndex}
+              highlightRole={view.data.board.role}
+            />
+          </div>
+        ) : null}
+
         {view.data?.debrief ? (
           <div className="mt-10">
             <DebriefPanel result={view.data.debrief} title={`${view.data.debrief.teamName} results`} />
@@ -136,7 +147,7 @@ function PlayPage() {
 
         <div className="mt-8">
           <Button asChild variant="ghost" size="sm">
-            <Link to="/how-to-play">Review the rules</Link>
+            <Link to="/how-to-play">Review the rules &amp; FAQ</Link>
           </Button>
         </div>
       </main>

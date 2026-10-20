@@ -12,6 +12,7 @@ import {
   teamName,
   teamTotalCost,
 } from "./engine.ts";
+import { buildSessionLeaderboard } from "./leaderboard.ts";
 import {
   BOT_ONLY_WEEK_MS,
   BOT_ORDER_DELAY_MS,
@@ -365,6 +366,13 @@ async function instructorView(row: SessionRow): Promise<InstructorView> {
   const { seats, teams } = await syncSessionBots(row);
   const firstState = teams[0] ? parseState(teams[0].state_json) : undefined;
   const edition: Edition = firstState?.edition ?? "ung";
+  const teamResults = teams.map((t) =>
+    toTeamResult(
+      t.team_index,
+      parseState(t.state_json),
+      seats.filter((s) => s.team_index === t.team_index),
+    ),
+  );
   return {
     roomCode: row.room_code,
     pin: row.instructor_pin,
@@ -374,13 +382,8 @@ async function instructorView(row: SessionRow): Promise<InstructorView> {
     totalWeeks: row.total_weeks,
     demandRevealed: row.demand_revealed,
     edition,
-    teams: teams.map((t) =>
-      toTeamResult(
-        t.team_index,
-        parseState(t.state_json),
-        seats.filter((s) => s.team_index === t.team_index),
-      ),
-    ),
+    teams: teamResults,
+    leaderboard: buildSessionLeaderboard(teamResults),
   };
 }
 
@@ -668,6 +671,13 @@ export const getSeatView = createServerFn({ method: "POST" })
     const team = teams.find((t) => t.team_index === seat.team_index) ?? err("Team missing.");
     const state = parseState(team.state_json);
     const teammates = allSeats.filter((s) => s.team_index === seat.team_index);
+    const allTeamResults = teams.map((t) =>
+      toTeamResult(
+        t.team_index,
+        parseState(t.state_json),
+        allSeats.filter((s) => s.team_index === t.team_index),
+      ),
+    );
     const debrief =
       state.phase === "finished" || session.demand_revealed
         ? toTeamResult(seat.team_index, state, teammates)
@@ -679,6 +689,7 @@ export const getSeatView = createServerFn({ method: "POST" })
       edition: state.edition ?? "ung",
       board: boardFrom(state, seat, teammates, session.demand_revealed),
       debrief,
+      leaderboard: buildSessionLeaderboard(allTeamResults),
     };
     return view;
   });
@@ -725,6 +736,13 @@ export const placeOrder = createServerFn({ method: "POST" })
     const updatedState = parseState(updatedTeam.state_json);
     const updatedTeammates = syncedSeats.filter((s) => s.team_index === seat.team_index);
 
+    const allTeamResults = syncedTeams.map((t) =>
+      toTeamResult(
+        t.team_index,
+        parseState(t.state_json),
+        syncedSeats.filter((s) => s.team_index === t.team_index),
+      ),
+    );
     const debrief =
       updatedState.phase === "finished" || session.demand_revealed
         ? toTeamResult(seat.team_index, updatedState, updatedTeammates)
@@ -736,6 +754,7 @@ export const placeOrder = createServerFn({ method: "POST" })
       edition: updatedState.edition ?? "ung",
       board: boardFrom(updatedState, seat, updatedTeammates, session.demand_revealed),
       debrief,
+      leaderboard: buildSessionLeaderboard(allTeamResults),
     };
     return view;
   });
