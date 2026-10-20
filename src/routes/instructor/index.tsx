@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSession, instructorLogin } from "@/lib/game/api";
+import { useEdition } from "@/lib/game/edition";
 import { setInstructorSession } from "@/lib/game/session-store";
-import { TEAM_NAMES } from "@/lib/game/types";
 
 export const Route = createFileRoute("/instructor/")({ component: InstructorGate });
 
 function InstructorGate() {
   const navigate = useNavigate();
+  const { edition, config } = useEdition();
   const [teamCount, setTeamCount] = useState(1);
   const [code, setCode] = useState("");
   const [pin, setPin] = useState("");
@@ -21,12 +22,20 @@ function InstructorGate() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
 
+  const teamList = config.teamNames;
+
+  useEffect(() => {
+    if (teamCount > teamList.length) {
+      setTeamCount(teamList.length);
+    }
+  }, [teamCount, teamList.length]);
+
   async function create(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setCreateError(null);
     try {
-      const session = await createSession({ data: { teamCount } });
+      const session = await createSession({ data: { teamCount, edition } });
       setInstructorSession({
         token: session.token,
         roomCode: session.roomCode,
@@ -82,11 +91,17 @@ function InstructorGate() {
       />
       <main className="mx-auto grid w-full max-w-5xl flex-1 gap-6 px-4 py-8 lg:grid-cols-2">
         <div className="lg:col-span-2">
-          <h1 className="font-display text-4xl font-semibold text-navy">Instructor desk</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {edition === "general" ? "General Supply Chain Edition" : "UNG Nighthawk Edition"}
+          </p>
+          <h1 className="mt-1 font-display text-4xl font-semibold text-navy">Instructor desk</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground text-pretty">
-            Open a room, write the code on the board, and let four students pick
+            Open a room, write the code on the board, and let students pick
             seats. Built for one class period. Empty seats become computer
             players when you start.
+            {edition === "general"
+              ? " Students can also customize their Greek team names."
+              : ""}
           </p>
         </div>
 
@@ -108,11 +123,18 @@ function InstructorGate() {
                   onChange={(e) => setTeamCount(Number(e.target.value))}
                   className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm font-medium"
                 >
-                  {TEAM_NAMES.map((name, i) => (
-                    <option key={name} value={i + 1}>
-                      {i + 1} chain{i === 0 ? "" : "s"} ({ (i + 1) * 4 } seats) — {TEAM_NAMES.slice(0, i + 1).join(", ")}
-                    </option>
-                  ))}
+                  {teamList.map((name, i) => {
+                    const count = i + 1;
+                    const previewNames =
+                      count <= 6
+                        ? teamList.slice(0, count).join(", ")
+                        : `${teamList.slice(0, 4).join(", ")} … ${teamList[i]}`;
+                    return (
+                      <option key={name} value={count}>
+                        {count} chain{count === 1 ? "" : "s"} ({count * 4} seats) — {previewNames}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               {createError ? (

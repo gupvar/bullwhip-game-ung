@@ -10,6 +10,8 @@ export const SURGE_WEEK = 5;
 export const MAX_ORDER = 30;
 export const MIN_ORDER = 0;
 
+export type Edition = "ung" | "general";
+
 /** Classic four-echelon classroom chain (retailer → factory). */
 export const ROLES = ["retailer", "wholesaler", "distributor", "factory"] as const;
 export type Role = (typeof ROLES)[number];
@@ -23,6 +25,13 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_SHORT: Record<Role, string> = {
   retailer: "Campus store",
+  wholesaler: "Wholesaler",
+  distributor: "Distributor",
+  factory: "Factory",
+};
+
+export const ROLE_SHORT_GENERAL: Record<Role, string> = {
+  retailer: "Retail store",
   wholesaler: "Wholesaler",
   distributor: "Distributor",
   factory: "Factory",
@@ -51,6 +60,13 @@ export const ROLE_CUSTOMER: Record<Role, string> = {
   factory: "the distributor",
 };
 
+export const ROLE_CUSTOMER_GENERAL: Record<Role, string> = {
+  retailer: "end-consumer shoppers",
+  wholesaler: "the retailer",
+  distributor: "the wholesaler",
+  factory: "the distributor",
+};
+
 export const ROLE_UPSTREAM: Record<Role, string> = {
   retailer: "the wholesaler",
   wholesaler: "the distributor",
@@ -66,6 +82,35 @@ export const TEAM_NAMES = [
   "Blue Ridge",
   "Watkinsville",
 ] as const;
+
+export const GREEK_TEAM_NAMES = [
+  "Alpha",
+  "Beta",
+  "Gamma",
+  "Delta",
+  "Epsilon",
+  "Zeta",
+  "Eta",
+  "Theta",
+  "Iota",
+  "Kappa",
+  "Lambda",
+  "Mu",
+  "Nu",
+  "Xi",
+  "Omicron",
+  "Pi",
+  "Rho",
+  "Sigma",
+  "Tau",
+  "Upsilon",
+  "Phi",
+  "Chi",
+  "Psi",
+  "Omega",
+] as const;
+
+export const MAX_TEAMS = GREEK_TEAM_NAMES.length;
 
 export type TeamPhase = "lobby" | "ordering" | "finished";
 export type SessionStatus = "lobby" | "playing" | "finished";
@@ -107,6 +152,8 @@ export interface TeamState {
   roles: Record<Role, RoleState>;
   pendingOrders: Partial<Record<Role, number>>;
   history: WeekRecord[];
+  customName?: string;
+  edition?: Edition;
 }
 
 export interface SeatInfo {
@@ -187,6 +234,7 @@ export interface InstructorView {
   teamCount: number;
   totalWeeks: number;
   demandRevealed: boolean;
+  edition?: Edition;
   teams: TeamPublicResult[];
 }
 
@@ -194,6 +242,7 @@ export interface SeatView {
   roomCode: string;
   status: SessionStatus;
   demandRevealed: boolean;
+  edition?: Edition;
   board: RoleBoardView;
   debrief: TeamPublicResult | null;
 }

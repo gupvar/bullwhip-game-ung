@@ -14,11 +14,12 @@ import {
 } from "./engine.ts";
 import {
   MAX_ORDER,
+  MAX_TEAMS,
   MIN_ORDER,
   ROLES,
   ROLE_LABEL,
-  TEAM_NAMES,
   TOTAL_WEEKS,
+  type Edition,
   type InstructorView,
   type Role,
   type SeatInfo,
@@ -35,6 +36,12 @@ const Handle = z
   .max(16)
   .regex(/^[A-Za-z0-9][A-Za-z0-9 .'-]{0,15}$/, "Use a short nickname, no email.");
 
+const TeamCustomName = z
+  .string()
+  .trim()
+  .min(1, "Enter a team name.")
+  .max(28, "Keep the team name under 28 characters.");
+
 const RoomCode = z
   .string()
   .trim()
@@ -47,6 +54,7 @@ const Pin = z
   .regex(/^\d{4}$/, "PIN is 4 digits.");
 
 const RoleZ = z.enum(ROLES);
+const EditionZ = z.enum(["ung", "general"]).optional();
 
 function randomHex(bytes = 18): string {
   const a = new Uint8Array(bytes);
@@ -180,9 +188,10 @@ function seatInfos(seats: SeatRow[], teams: TeamRow[]): SeatInfo[] {
 }
 
 function toTeamResult(teamIndex: number, state: TeamState, seats: SeatRow[]): TeamPublicResult {
+  const ed = state.edition ?? "ung";
   return {
     teamIndex,
-    teamName: teamName(teamIndex),
+    teamName: teamName(teamIndex, ed, state.customName),
     phase: state.phase,
     week: state.week,
     totalCost: teamTotalCost(state),
@@ -200,6 +209,8 @@ function toTeamResult(teamIndex: number, state: TeamState, seats: SeatRow[]): Te
 
 async function instructorView(row: SessionRow): Promise<InstructorView> {
   const [seats, teams] = await Promise.all([loadSeats(row.id), loadTeams(row.id)]);
+  const firstState = teams[0] ? parseState(teams[0].state_json) : undefined;
+  const edition: Edition = firstState?.edition ?? "ung";
   return {
     roomCode: row.room_code,
     pin: row.instructor_pin,
@@ -208,6 +219,7 @@ async function instructorView(row: SessionRow): Promise<InstructorView> {
     teamCount: row.team_count,
     totalWeeks: row.total_weeks,
     demandRevealed: row.demand_revealed,
+    edition,
     teams: teams.map((t) =>
       toTeamResult(
         t.team_index,
@@ -257,10 +269,16 @@ function maybeAdvance(state: TeamState, seats: SeatRow[]): TeamState {
 
 export const createSession = createServerFn({ method: "POST" })
   .validator((input: unknown) =>
-    z.object({ teamCount: z.number().int().min(1).max(TEAM_NAMES.length) }).parse(input),
+    z
+      .object({
+        teamCount: z.number().int().min(1).max(MAX_TEAMS),
+        edition: EditionZ,
+      })
+      .parse(input),
   )
   .handler(async ({ data }) => {
     const db = await sql();
+    const edition: Edition = data.edition ?? "ung";
     let code = makeRoomCode();
     for (let i = 0; i < 8; i += 1) {
       const existing = await db<{ id: string }>`select id from game_sessions where room_code = ${code}`;
@@ -275,7 +293,7 @@ export const createSession = createServerFn({ method: "POST" })
       values (${id}, ${code}, ${pin}, ${token}, ${data.teamCount}, ${TOTAL_WEEKS})
     `;
     for (let t = 0; t < data.teamCount; t += 1) {
-      const state = JSON.stringify(createTeamState());
+      const state = JSON.stringify(createTeamState(edition));
       await db`
         insert into game_teams (session_id, team_index, state_json)
         values (${id}, ${t}, ${state})
@@ -287,7 +305,7 @@ export const createSession = createServerFn({ method: "POST" })
         `;
       }
     }
-    return { roomCode: code, pin, token, teamCount: data.teamCount };
+    return { roomCode: code, pin, token, teamCount: data.teamCount, edition };
   });
 
 export const instructorLogin = createServerFn({ method: "POST" })
@@ -303,12 +321,46 @@ export const listOpenSeats = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const row = await loadSessionByCode(data.roomCode);
     const [seats, teams] = await Promise.all([loadSeats(row.id), loadTeams(row.id)]);
+    const parsedTeams = teams.map((t) => ({
+      index: t.team_index,
+      state: parseState(t.state_json),
+    }));
+    const edition: Edition = parsedTeams[0]?.state.edition ?? "ung";
+    const teamNames = parsedTeams.map((t) =>
+      teamName(t.index, t.state.edition ?? edition, t.state.customName),
+    );
     return {
       roomCode: row.room_code,
       status: row.status,
       week: row.week,
       teamCount: row.team_count,
+      edition,
+      teamNames,
       seats: seatInfos(seats, teams),
+    };
+  });
+
+export const renameTeam = createServerFn({ method: "POST" })
+  .validator((input: unknown) =>
+    z
+      .object({
+        roomCode: RoomCode,
+        teamIndex: z.number().int().min(0).max(MAX_TEAMS - 1),
+        customName: TeamCustomName,
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const row = await loadSessionByCode(data.roomCode);
+    const teams = await loadTeams(row.id);
+    const team = teams.find((t) => t.team_index === data.teamIndex) ?? err("Team not found.");
+    const state = parseState(team.state_json);
+    state.customName = data.customName;
+    await saveTeam(row.id, data.teamIndex, state);
+    const ed = state.edition ?? "ung";
+    return {
+      teamIndex: data.teamIndex,
+      teamName: teamName(data.teamIndex, ed, state.customName),
     };
   });
 
@@ -318,7 +370,7 @@ export const joinSeat = createServerFn({ method: "POST" })
       .object({
         roomCode: RoomCode,
         handle: Handle,
-        teamIndex: z.number().int().min(0).max(TEAM_NAMES.length - 1),
+        teamIndex: z.number().int().min(0).max(MAX_TEAMS - 1),
         role: RoleZ,
       })
       .parse(input),
@@ -445,12 +497,13 @@ function boardFrom(
   demandRevealed: boolean,
 ): SeatView["board"] {
   const roleState = state.roles[seat.role];
+  const ed = state.edition ?? "ung";
   return {
     week: state.week,
     phase: state.phase,
     role: seat.role,
     teamIndex: seat.team_index,
-    teamName: teamName(seat.team_index),
+    teamName: teamName(seat.team_index, ed, state.customName),
     handle: seat.handle,
     inventory: roleState.inventory,
     backorder: roleState.backorder,
@@ -519,6 +572,7 @@ export const getSeatView = createServerFn({ method: "POST" })
       roomCode: session.room_code,
       status: session.status,
       demandRevealed: session.demand_revealed,
+      edition: state.edition ?? "ung",
       board: boardFrom(state, seat, teammates, session.demand_revealed),
       debrief,
     };
@@ -579,6 +633,7 @@ export const placeOrder = createServerFn({ method: "POST" })
       roomCode: session.room_code,
       status: session.status,
       demandRevealed: session.demand_revealed,
+      edition: state.edition ?? "ung",
       board: boardFrom(state, seat, teammates, session.demand_revealed),
       debrief,
     };

@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
-import { ROLE_LABEL, ROLE_SHORT, ROLES, type Role } from "@/lib/game/types";
+import { useEdition } from "@/lib/game/edition";
+import { ROLE_LABEL, ROLES, type Role } from "@/lib/game/types";
 import { cn } from "@/lib/utils";
 
 export function ChainStrip({
@@ -9,6 +10,7 @@ export function ChainStrip({
   active?: Role;
   compact?: boolean;
 }) {
+  const { config } = useEdition();
   return (
     <ol className="flex flex-wrap items-center gap-2">
       <li className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -25,7 +27,7 @@ export function ChainStrip({
                 : "bg-card text-foreground shadow-[var(--shadow-border)]",
             )}
           >
-            {compact ? ROLE_SHORT[role] : ROLE_LABEL[role]}
+            {compact ? config.roleShort[role] : ROLE_LABEL[role]}
           </span>
         </li>
       ))}

@@ -47,6 +47,35 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Modern Minimalist Theme for General Edition */
+  html[data-edition="general"] {
+    --font-display: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-sans: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+    --color-navy: #0f172a;
+    --color-navy-deep: #1e293b;
+    --color-gold: #10b981;
+    --color-paper: #f8fafc;
+    --color-ink: #0f172a;
+    --color-teal: #0d9488;
+    --color-cream: #ffffff;
+
+    --color-background: #f8fafc;
+    --color-foreground: #0f172a;
+    --color-primary: #0f172a;
+    --color-primary-foreground: #f8fafc;
+    --color-accent: #10b981;
+    --color-accent-foreground: #064e3b;
+    --color-muted: #f1f5f9;
+    --color-muted-foreground: #64748b;
+    --color-card: #ffffff;
+    --color-card-foreground: #0f172a;
+    --color-border: #e2e8f0;
+    --color-ring: #0f172a;
+    --color-secondary: #f1f5f9;
+    --color-secondary-foreground: #0f172a;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);

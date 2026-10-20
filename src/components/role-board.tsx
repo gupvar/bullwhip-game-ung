@@ -1,10 +1,12 @@
-import { Warehouse } from "lucide-react";
+import { useState } from "react";
+import { Pencil, Warehouse, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { OrderStepper } from "@/components/order-stepper";
+import { useEdition } from "@/lib/game/edition";
 import {
-  ROLE_CUSTOMER,
   ROLE_LABEL,
   ROLE_UPSTREAM,
   type RoleBoardView,
@@ -46,6 +48,7 @@ export function RoleBoard({
   onSubmit,
   submitting,
   showMarket,
+  onRenameTeam,
 }: {
   board: RoleBoardView;
   quantity: number;
@@ -53,18 +56,85 @@ export function RoleBoard({
   onSubmit: () => void;
   submitting?: boolean;
   showMarket?: boolean;
+  onRenameTeam?: (newName: string) => Promise<void> | void;
 }) {
+  const { config } = useEdition();
+  const [editingTeam, setEditingTeam] = useState(false);
+  const [teamDraft, setTeamDraft] = useState(board.teamName);
+  const [savingName, setSavingName] = useState(false);
+
   const waiting = board.teammates.filter((t) => !t.hasOrdered);
   const ordered = board.pendingOrder != null;
   const canOrder = board.phase === "ordering" && !ordered;
+
+  async function saveTeamName() {
+    if (!onRenameTeam || !teamDraft.trim()) return;
+    setSavingName(true);
+    try {
+      await onRenameTeam(teamDraft.trim());
+      setEditingTeam(false);
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {board.teamName} campus · {ROLE_LABEL[board.role]}
-          </p>
+          <div className="flex items-center gap-2">
+            {editingTeam ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={teamDraft}
+                  onChange={(e) => setTeamDraft(e.target.value)}
+                  maxLength={28}
+                  className="h-7 w-44 text-xs"
+                  placeholder="Team name"
+                  aria-label="Edit team name"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2"
+                  disabled={savingName || !teamDraft.trim()}
+                  onClick={() => void saveTeamName()}
+                >
+                  <Check className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => setEditingTeam(false)}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  {board.teamName} {config.chainLabel} · {ROLE_LABEL[board.role]}
+                </p>
+                {onRenameTeam && config.allowCustomTeamNames ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeamDraft(board.teamName);
+                      setEditingTeam(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Edit team name"
+                  >
+                    <Pencil className="size-3" />
+                    <span>Edit team name</span>
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-navy">
             Week {board.week} of 12
           </h1>
@@ -72,7 +142,7 @@ export function RoleBoard({
             <p className="text-sm text-muted-foreground">Playing as {board.handle}</p>
           ) : null}
         </div>
-        <Badge variant="gold">Nighthawk gear · cases</Badge>
+        <Badge variant="gold">{config.productBadge}</Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -100,7 +170,7 @@ export function RoleBoard({
             <Warehouse className="mt-0.5 size-5 text-navy" />
             <div className="text-sm text-pretty">
               <p>
-                {ROLE_CUSTOMER[board.role]} wanted{" "}
+                {config.roleCustomer[board.role]} wanted{" "}
                 <span className="font-semibold tabular-nums">{board.lastDemand}</span>{" "}
                 this week. You shipped{" "}
                 <span className="font-semibold tabular-nums">{board.lastShipped}</span>.
@@ -158,52 +228,61 @@ export function RoleBoard({
                   Waiting on{" "}
                   {waiting
                     .map((t) => ROLE_LABEL[t.role] + (t.handle ? ` (${t.handle})` : ""))
-                    .join(" and ")}
+                    .join(", ")}
                   .
                 </p>
               ) : (
-                <p className="mt-1 text-muted-foreground">Resolving the week…</p>
+                <p className="mt-1 text-muted-foreground">Advancing to next week…</p>
               )}
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      {showMarket && board.role !== "retailer" ? (
-        <p className="text-sm text-muted-foreground">
-          Instructor has revealed shopper demand. Compare it with the orders you placed.
+      {showMarket && board.customerDemand != null && board.role !== "retailer" ? (
+        <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm">
+          Shoppers at the retail store actually asked for{" "}
+          <span className="font-semibold tabular-nums">{board.customerDemand}</span>{" "}
+          cases this week.
         </p>
       ) : null}
 
       {board.ownHistory.length > 0 ? (
         <Card>
-          <CardContent className="overflow-x-auto p-0">
-            <table className="w-full min-w-[28rem] text-left text-sm">
-              <thead className="border-b border-border text-xs uppercase tracking-[0.12em] text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Week</th>
-                  <th className="px-2 py-3 font-medium">In</th>
-                  <th className="px-2 py-3 font-medium">Demand</th>
-                  <th className="px-2 py-3 font-medium">Out</th>
-                  <th className="px-2 py-3 font-medium">Stock</th>
-                  <th className="px-2 py-3 font-medium">Owed</th>
-                  <th className="px-4 py-3 font-medium">You ordered</th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {board.ownHistory.map((row) => (
-                  <tr key={row.week} className="border-b border-border/70 last:border-0">
-                    <td className="px-4 py-2">{row.week}</td>
-                    <td className="px-2 py-2">{row.received}</td>
-                    <td className="px-2 py-2">{row.demand}</td>
-                    <td className="px-2 py-2">{row.shipped}</td>
-                    <td className="px-2 py-2">{row.inventory}</td>
-                    <td className="px-2 py-2">{row.backorder}</td>
-                    <td className="px-4 py-2 font-medium">{row.order}</td>
+          <CardContent>
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Your past weeks
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm tabular-nums">
+                <thead className="border-b border-border text-xs text-muted-foreground">
+                  <tr>
+                    <th className="py-2 pr-3">Wk</th>
+                    <th className="py-2 pr-3">In</th>
+                    <th className="py-2 pr-3">Asked</th>
+                    <th className="py-2 pr-3">Sent</th>
+                    <th className="py-2 pr-3">On hand</th>
+                    <th className="py-2 pr-3">Owed</th>
+                    <th className="py-2 pr-3">Ordered</th>
+                    <th className="py-2">Cost</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {board.ownHistory.map((row) => (
+                    <tr key={row.week} className="border-b border-border/60 last:border-0">
+                      <td className="py-1.5 pr-3 font-medium">{row.week}</td>
+                      <td className="py-1.5 pr-3">{row.received}</td>
+                      <td className="py-1.5 pr-3">{row.demand}</td>
+                      <td className="py-1.5 pr-3">{row.shipped}</td>
+                      <td className="py-1.5 pr-3">{row.inventory}</td>
+                      <td className="py-1.5 pr-3">{row.backorder}</td>
+                      <td className="py-1.5 pr-3 font-semibold text-navy">{row.order}</td>
+                      <td className="py-1.5">${row.cost}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       ) : null}

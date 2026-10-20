@@ -2,6 +2,7 @@ import {
   BACKORDER_COST,
   BASE_DEMAND,
   DOWNSTREAM,
+  GREEK_TEAM_NAMES,
   HOLDING_COST,
   MAX_ORDER,
   MIN_ORDER,
@@ -11,8 +12,10 @@ import {
   START_PRODUCTION,
   SURGE_DEMAND,
   SURGE_WEEK,
+  TEAM_NAMES,
   TOTAL_WEEKS,
   UPSTREAM,
+  type Edition,
   type Role,
   type RoleState,
   type RoleWeekSnapshot,
@@ -30,16 +33,18 @@ export function customerDemand(week: number): number {
   return week < SURGE_WEEK ? BASE_DEMAND : SURGE_DEMAND;
 }
 
-export function teamName(teamIndex: number): string {
-  const names = [
-    "Dahlonega",
-    "Gainesville",
-    "Oconee",
-    "Cumming",
-    "Blue Ridge",
-    "Watkinsville",
-  ];
-  return names[teamIndex] ?? `Team ${teamIndex + 1}`;
+export function teamName(
+  teamIndex: number,
+  edition: Edition = "ung",
+  customName?: string,
+): string {
+  if (customName && customName.trim()) {
+    return customName.trim();
+  }
+  if (edition === "general") {
+    return GREEK_TEAM_NAMES[teamIndex] ?? `Team ${teamIndex + 1}`;
+  }
+  return TEAM_NAMES[teamIndex] ?? GREEK_TEAM_NAMES[teamIndex] ?? `Team ${teamIndex + 1}`;
 }
 
 function freshRole(): RoleState {
@@ -63,7 +68,7 @@ function byRole<T>(make: (role: Role) => T): Record<Role, T> {
   return out;
 }
 
-export function createTeamState(): TeamState {
+export function createTeamState(edition: Edition = "ung", customName?: string): TeamState {
   return {
     week: 0,
     phase: "lobby",
@@ -71,6 +76,8 @@ export function createTeamState(): TeamState {
     roles: byRole(() => freshRole()),
     pendingOrders: {},
     history: [],
+    edition,
+    ...(customName ? { customName } : {}),
   };
 }
 

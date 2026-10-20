@@ -3,10 +3,14 @@ import { ChainStrip } from "@/components/chain-strip";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEdition } from "@/lib/game/edition";
 
 export const Route = createFileRoute("/how-to-play")({ component: HowToPlay });
 
 function HowToPlay() {
+  const { edition } = useEdition();
+  const isGeneral = edition === "general";
+
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader
@@ -22,10 +26,9 @@ function HowToPlay() {
         </p>
         <h1 className="mt-2 font-display text-4xl font-semibold text-navy">How to play</h1>
         <p className="mt-3 text-muted-foreground text-pretty">
-          You are moving cases of Nighthawk gear through a four-seat chain —
-          the classic classroom supply-chain game, set at UNG. The whole lab is
-          12 weeks and takes about 15–20 minutes of play. Each week you make
-          one decision: how many cases to order.
+          {isGeneral
+            ? "You are moving cases of goods through a four-seat supply chain — the classic classroom bullwhip simulation. The whole lab is 12 weeks and takes about 15–20 minutes of play. Each week you make one decision: how many cases to order."
+            : "You are moving cases of Nighthawk gear through a four-seat chain — the classic classroom supply-chain game, set at UNG. The whole lab is 12 weeks and takes about 15–20 minutes of play. Each week you make one decision: how many cases to order."}
         </p>
 
         <div className="mt-6">
@@ -36,7 +39,11 @@ function HowToPlay() {
           <Rule
             n="1"
             title="Know your seat"
-            body="Retailer (campus store) sells to UNG shoppers and orders from the wholesaler. Wholesaler ships to the retailer and orders from the distributor. Distributor ships to the wholesaler and orders from the factory. Factory ships to the distributor and starts production."
+            body={
+              isGeneral
+                ? "Retailer (storefront) sells to retail shoppers and orders from the wholesaler. Wholesaler ships to the retailer and orders from the distributor. Distributor ships to the wholesaler and orders from the factory. Factory ships to the distributor and starts production."
+                : "Retailer (campus store) sells to UNG shoppers and orders from the wholesaler. Wholesaler ships to the retailer and orders from the distributor. Distributor ships to the wholesaler and orders from the factory. Factory ships to the distributor and starts production."
+            }
           />
           <Rule
             n="2"

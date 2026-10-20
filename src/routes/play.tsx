@@ -6,7 +6,8 @@ import { DebriefPanel } from "@/components/debrief-panel";
 import { RoleBoard } from "@/components/role-board";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
-import { getSeatView, placeOrder } from "@/lib/game/api";
+import { getSeatView, placeOrder, renameTeam } from "@/lib/game/api";
+import { useEdition } from "@/lib/game/edition";
 import { clearStudentSession, getStudentSession, type StudentSession } from "@/lib/game/session-store";
 
 export const Route = createFileRoute("/play")({ component: PlayPage });
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/play")({ component: PlayPage });
 function PlayPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { edition, setEdition } = useEdition();
   const [session, setSession] = useState<StudentSession | null>(null);
   const [ready, setReady] = useState(false);
   const [qty, setQty] = useState(4);
@@ -37,6 +39,12 @@ function PlayPage() {
   });
 
   useEffect(() => {
+    if (view.data?.edition && view.data.edition !== edition) {
+      setEdition(view.data.edition);
+    }
+  }, [view.data?.edition, edition, setEdition]);
+
+  useEffect(() => {
     if (view.data?.board && view.data.board.pendingOrder == null) {
       setQty(view.data.board.lastDemand);
     }
@@ -49,6 +57,23 @@ function PlayPage() {
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Order failed."),
   });
+
+  async function handleRenameTeam(newName: string) {
+    if (!session || !view.data) return;
+    try {
+      await renameTeam({
+        data: {
+          roomCode: session.roomCode,
+          teamIndex: view.data.board.teamIndex,
+          customName: newName,
+        },
+      });
+      await view.refetch();
+      toast.success(`Team renamed to ${newName}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not rename team.");
+    }
+  }
 
   if (!ready) {
     return (
@@ -97,6 +122,7 @@ function PlayPage() {
             onSubmit={() => order.mutate()}
             submitting={order.isPending}
             showMarket={view.data.demandRevealed}
+            onRenameTeam={handleRenameTeam}
           />
         ) : (
           <p className="text-sm text-muted-foreground">Loading your board…</p>

@@ -9,6 +9,7 @@ import {
   playWeek,
   STEADY_ORDERS,
   submitOrder,
+  teamName,
   teamTotalCost,
   variance,
 } from "./engine.ts";
@@ -94,5 +95,20 @@ describe("botOrder", () => {
 describe("variance", () => {
   it("is zero for a flat series", () => {
     assert.equal(variance([4, 4, 4, 4]), 0);
+  });
+});
+
+describe("teamName & edition", () => {
+  it("uses UNG campus names in ung edition and Greek letters in general edition", () => {
+    assert.equal(teamName(0, "ung"), "Dahlonega");
+    assert.equal(teamName(1, "ung"), "Gainesville");
+    assert.equal(teamName(0, "general"), "Alpha");
+    assert.equal(teamName(7, "general"), "Theta");
+    assert.equal(teamName(23, "general"), "Omega");
+  });
+
+  it("prefers customName when set", () => {
+    assert.equal(teamName(0, "general", "Supply Chain Wizards"), "Supply Chain Wizards");
+    assert.equal(teamName(2, "ung", "Nighthawk Squad"), "Nighthawk Squad");
   });
 });

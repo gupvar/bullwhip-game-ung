@@ -5,6 +5,7 @@ import { RoleBoard } from "@/components/role-board";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { useEdition } from "@/lib/game/edition";
 import {
   amplification,
   applyOrders,
@@ -17,6 +18,7 @@ import {
   teamTotalCost,
 } from "@/lib/game/engine";
 import {
+  type Edition,
   ROLES,
   ROLE_LABEL,
   type Role,
@@ -29,14 +31,14 @@ export const Route = createFileRoute("/practice")({ component: PracticePage });
 
 type Mode = "all" | Role;
 
-function boardView(state: TeamState, role: Role, handle: string): RoleBoardView {
+function boardView(state: TeamState, role: Role, handle: string, edition: Edition): RoleBoardView {
   const r = state.roles[role];
   return {
     week: state.week,
     phase: state.phase,
     role,
     teamIndex: 0,
-    teamName: teamName(0),
+    teamName: teamName(0, edition, state.customName),
     handle,
     inventory: r.inventory,
     backorder: r.backorder,
@@ -69,10 +71,10 @@ function boardView(state: TeamState, role: Role, handle: string): RoleBoardView 
   };
 }
 
-function toResult(state: TeamState): TeamPublicResult {
+function toResult(state: TeamState, edition: Edition): TeamPublicResult {
   return {
     teamIndex: 0,
-    teamName: teamName(0),
+    teamName: teamName(0, edition, state.customName),
     phase: state.phase,
     week: state.week,
     totalCost: teamTotalCost(state),
@@ -92,19 +94,21 @@ function toResult(state: TeamState): TeamPublicResult {
 }
 
 function PracticePage() {
+  const { edition } = useEdition();
+  const isGeneral = edition === "general";
   const [mode, setMode] = useState<Mode>("all");
   const [started, setStarted] = useState(false);
-  const [state, setState] = useState<TeamState>(() => createTeamState());
+  const [state, setState] = useState<TeamState>(() => createTeamState(edition));
   const [focus, setFocus] = useState<Role>("retailer");
   const [qty, setQty] = useState(4);
 
   const board = useMemo(
-    () => boardView(state, focus, mode === "all" ? ROLE_LABEL[focus] : "You"),
-    [state, focus, mode],
+    () => boardView(state, focus, mode === "all" ? ROLE_LABEL[focus] : "You", edition),
+    [state, focus, mode, edition],
   );
 
   function start() {
-    const next = beginWeek(createTeamState());
+    const next = beginWeek(createTeamState(edition));
     setState(next);
     setStarted(true);
     const first = mode === "all" ? "retailer" : mode;
@@ -150,10 +154,9 @@ function PracticePage() {
           <div className="flex flex-col gap-5">
             <h1 className="font-display text-4xl font-semibold text-navy">Practice lab</h1>
             <p className="text-muted-foreground text-pretty">
-              Same 12-week Nighthawk gear chain, no classmates required. Play every
-              seat to feel the delay — that is how an instructor can also demo
-              the lab before class — or hold one seat and let a simple computer
-              rule run the others.
+              {isGeneral
+                ? "Same 12-week supply chain simulation, no classmates required. Play every seat to feel the delay — that is how an instructor can also demo the lab before class — or hold one seat and let a simple computer rule run the others."
+                : "Same 12-week Nighthawk gear chain, no classmates required. Play every seat to feel the delay — that is how an instructor can also demo the lab before class — or hold one seat and let a simple computer rule run the others."}
             </p>
             <div className="flex flex-col gap-2">
               <Label>How do you want to play?</Label>
@@ -192,11 +195,17 @@ function PracticePage() {
                 quantity={qty}
                 onQuantity={setQty}
                 onSubmit={submit}
+                onRenameTeam={(nextName) =>
+                  setState((prev) => ({
+                    ...prev,
+                    customName: nextName.trim() || undefined,
+                  }))
+                }
               />
             ) : null}
             {state.phase === "finished" ? (
               <>
-                <DebriefPanel result={toResult(state)} title="Practice debrief" />
+                <DebriefPanel result={toResult(state, edition)} title="Practice debrief" />
                 <Button variant="outline" onClick={start}>
                   Play again
                 </Button>

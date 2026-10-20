@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Check, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { DebriefPanel } from "@/components/debrief-panel";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
@@ -12,9 +13,11 @@ import {
   fillBotsNow,
   getInstructorView,
   instructorPlaceOrder,
+  renameTeam,
   revealDemand,
   startGame,
 } from "@/lib/game/api";
+import { useEdition } from "@/lib/game/edition";
 import {
   clearInstructorSession,
   getInstructorSession,
@@ -29,8 +32,11 @@ export const Route = createFileRoute("/instructor/session")({
 function InstructorSession() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { edition, setEdition } = useEdition();
   const [session, setSession] = useState<InstructorAuth | null>(null);
   const [ready, setReady] = useState(false);
+  const [editingTeamIdx, setEditingTeamIdx] = useState<number | null>(null);
+  const [teamDraft, setTeamDraft] = useState("");
 
   useEffect(() => {
     setSession(getInstructorSession());
@@ -47,6 +53,12 @@ function InstructorSession() {
     queryFn: () => getInstructorView({ data: { token: session!.token } }),
     refetchInterval: 1500,
   });
+
+  useEffect(() => {
+    if (view.data?.edition && view.data.edition !== edition) {
+      setEdition(view.data.edition);
+    }
+  }, [view.data?.edition, edition, setEdition]);
 
   const start = useMutation({
     mutationFn: () => startGame({ data: { token: session!.token } }),
@@ -72,6 +84,24 @@ function InstructorSession() {
     },
   });
 
+  async function handleRenameTeam(teamIndex: number) {
+    if (!session || !teamDraft.trim()) return;
+    try {
+      await renameTeam({
+        data: {
+          roomCode: session.roomCode,
+          teamIndex,
+          customName: teamDraft.trim(),
+        },
+      });
+      setEditingTeamIdx(null);
+      await view.refetch();
+      toast.success("Team name updated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not rename team.");
+    }
+  }
+
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
@@ -81,6 +111,7 @@ function InstructorSession() {
   }
   if (!session) return null;
   const data = view.data;
+  const activeEdition = data?.edition ?? edition;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -108,7 +139,7 @@ function InstructorSession() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const url = `${window.location.origin}/join?code=${session.roomCode}`;
+                  const url = `${window.location.origin}/join?code=${session.roomCode}&edition=${activeEdition}`;
                   navigator.clipboard.writeText(url);
                   toast.success(`Copied join link: ${url}`);
                 }}
@@ -183,7 +214,52 @@ function InstructorSession() {
             <Card key={team.teamIndex}>
               <CardHeader className="flex flex-row items-start justify-between gap-2">
                 <div>
-                  <CardTitle>{team.teamName}</CardTitle>
+                  {editingTeamIdx === team.teamIndex ? (
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={teamDraft}
+                        onChange={(e) => setTeamDraft(e.target.value)}
+                        maxLength={28}
+                        className="h-8 w-44 text-sm"
+                        placeholder="Team name"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2"
+                        onClick={() => void handleRenameTeam(team.teamIndex)}
+                      >
+                        <Check className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2"
+                        onClick={() => setEditingTeamIdx(null)}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <CardTitle>{team.teamName}</CardTitle>
+                      {activeEdition === "general" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTeamDraft(team.teamName);
+                            setEditingTeamIdx(team.teamIndex);
+                          }}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          title="Rename team"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                   <p className="text-sm text-muted-foreground">
                     Cost ${team.totalCost}
                     {team.phase === "ordering" ? ` · week ${team.week}` : ""}

@@ -1,9 +1,10 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
+import { EditionProvider } from "@/lib/game/edition";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Nighthawk Chain";
+const APP_NAME = "Nighthawk Chain · Bullwhip Supply Chain Lab";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -14,7 +15,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "UNG supply chain lab. A one-class, four-seat bullwhip game: retailer, wholesaler, distributor, factory.",
+          "Interactive four-seat supply chain bullwhip simulation: retailer, wholesaler, distributor, factory.",
       },
       { name: "theme-color", content: "#1f3d7c" },
     ],
@@ -37,7 +38,9 @@ export const Route = createRootRoute({
       <body className="min-h-screen bg-background text-foreground font-sans">
         <PreviewHostBridge />
         <AuthProvider>
-          <Outlet />
+          <EditionProvider>
+            <Outlet />
+          </EditionProvider>
         </AuthProvider>
         <Scripts />
       </body>
